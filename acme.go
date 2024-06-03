@@ -11,6 +11,7 @@ import (
 	"9fans.net/go/acme"
 )
 
+// acmeFile represents an Acme file with its name, body, and cursor offsets.
 type acmeFile struct {
 	name       string
 	body       []byte
@@ -18,50 +19,53 @@ type acmeFile struct {
 	runeOffset int
 }
 
+// acmeCurrentFile retrieves the current file in Acme, including its name, body, and cursor offsets.
 func acmeCurrentFile() (*acmeFile, error) {
 	win, err := acmeCurrentWin()
 	if err != nil {
 		return nil, err
 	}
 	defer win.CloseFiles()
-	_, _, err = win.ReadAddr() // make sure address file is already open.
-	if err != nil {
-		return nil, fmt.Errorf("cannot read address: %v", err)
+
+	// Ensure the address file is already open by reading it
+	if _, _, err = win.ReadAddr(); err != nil {
+		return nil, fmt.Errorf("cannot read address: %w", err)
 	}
-	err = win.Ctl("addr=dot")
-	if err != nil {
-		return nil, fmt.Errorf("cannot set addr=dot: %v", err)
+
+	// Set the address to dot (current selection)
+	if err := win.Ctl("addr=dot"); err != nil {
+		return nil, fmt.Errorf("cannot set addr=dot: %w", err)
 	}
+
 	q0, _, err := win.ReadAddr()
 	if err != nil {
-		return nil, fmt.Errorf("cannot read address: %v", err)
+		return nil, fmt.Errorf("cannot read address: %w", err)
 	}
+
 	body, err := readBody(win)
 	if err != nil {
-		return nil, fmt.Errorf("cannot read body: %v", err)
-	}
-	tagb, err := win.ReadAll("tag")
-	if err != nil {
-		return nil, fmt.Errorf("cannot read tag: %v", err)
-	}
-	tag := string(tagb)
-	i := strings.Index(tag, " ")
-	if i == -1 {
-		return nil, fmt.Errorf("strange tag with no spaces")
+		return nil, fmt.Errorf("cannot read body: %w", err)
 	}
 
-	w := &acmeFile{
-		name:       tag[0:i],
-		body:       body,
-		offset:     runeOffset2ByteOffset(body, q0),
-		runeOffset: q0,
+	tag, err := readTag(win)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read tag: %w", err)
 	}
-	return w, nil
+
+	name, err := extractNameFromTag(tag)
+	if err != nil {
+		return nil, err
+	}
+
+	return &acmeFile{
+		name:       name,
+		body:       body,
+		offset:     runeOffsetToByteOffset(body, q0),
+		runeOffset: q0,
+	}, nil
 }
 
-// We would use win.ReadAll except for a bug in acme
-// where it crashes when reading trying to read more
-// than the negotiated 9P message size.
+// readBody reads the entire content of the body of an Acme window.
 func readBody(win *acme.Win) ([]byte, error) {
 	var body []byte
 	buf := make([]byte, 8000)
@@ -73,33 +77,56 @@ func readBody(win *acme.Win) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		body = append(body, buf[0:n]...)
+		body = append(body, buf[:n]...)
 	}
 	return body, nil
 }
 
+// readTag reads the tag content of an Acme window.
+func readTag(win *acme.Win) (string, error) {
+	tagb, err := win.ReadAll("tag")
+	if err != nil {
+		return "", err
+	}
+	return string(tagb), nil
+}
+
+// extractNameFromTag extracts the name from the Acme window tag.
+func extractNameFromTag(tag string) (string, error) {
+	i := strings.Index(tag, " ")
+	if i == -1 {
+		return "", fmt.Errorf("invalid tag format: no spaces found")
+	}
+	return tag[:i], nil
+}
+
+// acmeCurrentWin opens the current Acme window using the winid environment variable.
 func acmeCurrentWin() (*acme.Win, error) {
 	winid := os.Getenv("winid")
 	if winid == "" {
 		return nil, fmt.Errorf("$winid not set - not running inside acme?")
 	}
+
 	id, err := strconv.Atoi(winid)
 	if err != nil {
-		return nil, fmt.Errorf("invalid $winid %q", winid)
+		return nil, fmt.Errorf("invalid $winid %q: %w", winid, err)
 	}
+
 	if err := setNameSpace(); err != nil {
 		return nil, err
 	}
+
 	win, err := acme.Open(id, nil)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open acme window: %v", err)
+		return nil, fmt.Errorf("cannot open acme window: %w", err)
 	}
 	return win, nil
 }
 
-func runeOffset2ByteOffset(b []byte, off int) int {
+// runeOffsetToByteOffset converts a rune offset to a byte offset within a byte slice.
+func runeOffsetToByteOffset(b []byte, off int) int {
 	r := 0
-	for i, _ := range string(b) {
+	for i := range string(b) {
 		if r == off {
 			return i
 		}
@@ -108,51 +135,45 @@ func runeOffset2ByteOffset(b []byte, off int) int {
 	return len(b)
 }
 
+// setNameSpace sets the NAMESPACE environment variable if not already set.
 func setNameSpace() error {
 	if ns := os.Getenv("NAMESPACE"); ns != "" {
 		return nil
 	}
+
 	ns, err := nsFromDisplay()
 	if err != nil {
-		return fmt.Errorf("cannot get name space: %v", err)
+		return fmt.Errorf("cannot get namespace: %w", err)
 	}
+
 	os.Setenv("NAMESPACE", ns)
 	return nil
 }
 
-// taken from src/lib9/getns.c
-// This should go into goplan9/plan9/client.
+// nsFromDisplay retrieves the namespace based on the DISPLAY environment variable.
 func nsFromDisplay() (string, error) {
 	disp := os.Getenv("DISPLAY")
 	if disp == "" {
-		// original code had heuristic for OS X here;
-		// we'll just assume that and fail anyway if it
-		// doesn't work.
 		disp = ":0.0"
 	}
-	// canonicalize: xxx:0.0 => xxx:0
-	if i := strings.LastIndex(disp, ":"); i >= 0 {
-		if strings.HasSuffix(disp, ".0") {
-			disp = disp[:len(disp)-2]
-		}
+
+	if i := strings.LastIndex(disp, ":"); i >= 0 && strings.HasSuffix(disp, ".0") {
+		disp = disp[:len(disp)-2]
 	}
 
-	// turn /tmp/launch/:0 into _tmp_launch_:0 (OS X 10.5)
-	disp = strings.Replace(disp, "/", "_", -1)
+	disp = strings.ReplaceAll(disp, "/", "_")
 
 	u, err := user.Current()
 	if err != nil {
-		return "", fmt.Errorf("cannot get current user name: %v", err)
+		return "", fmt.Errorf("cannot get current user name: %w", err)
 	}
+
 	ns := fmt.Sprintf("/tmp/ns.%s.%s", u.Username, disp)
-	_, err = os.Stat(ns)
-	if os.IsNotExist(err) {
-		return "", fmt.Errorf("no name space directory found")
+	if _, err := os.Stat(ns); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("namespace directory does not exist")
+		}
+		return "", fmt.Errorf("cannot stat namespace directory: %w", err)
 	}
-	if err != nil {
-		return "", fmt.Errorf("cannot stat name space directory: %v", err)
-	}
-	// heuristics for checking permissions and owner of name space
-	// directory omitted.
 	return ns, nil
 }

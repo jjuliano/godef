@@ -7,29 +7,26 @@ Godef prints the source location of definitions in Go programs.
 
 Usage:
 
-	godef [-t] [-a] [-A] [-o offset] [-i] [-f file][-acme] [expr]
+	godef [-t] [-a] [-A] [-o offset] [-i] [-f file] [-acme] [expr]
 
-File specifies the source file in which to evaluate expr.
-Expr must be an identifier or a Go expression
-terminated with a field selector.
+Options:
 
-If expr is not given, then offset specifies a location
-within file, which should be within, or adjacent to
-an identifier or field selector.
+	-f file
+		Specifies the source file in which to evaluate expr.
+	-o offset
+		If expr is not given, specifies a location within file, which should be within or adjacent to an identifier or field selector.
+	-t
+		Prints the type of the expression.
+	-a
+		Prints all the public members (fields and methods) of the expression, along with their locations.
+	-A
+		Prints private members as well as public members.
+	-i
+		Reads the source from standard input; file must still be specified to locate other files in the same source package.
+	-acme
+		Reads the offset, file name, and contents from the current acme window.
 
-If the -t flag is given, the type of the expression will
-also be printed. The -a flag causes all the public
-members (fields and methods) of the expression,
-and their location, to be printed also; the -A flag
-prints private members too.
-
-If the -i flag is specified, the source is read
-from standard input, although file must still
-be specified so that other files in the same source
-package may be found.
-
-If the -acme flag is given, the offset, file name and contents
-are read from the current acme window.
+Expr must be an identifier or a Go expression terminated with a field selector.
 
 Example:
 

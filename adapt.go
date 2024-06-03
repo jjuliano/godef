@@ -1,8 +1,7 @@
 package main
 
-// The contents of this file are designed to adapt between the two implementations
-// of godef, and should be removed when we fully switch to the go/pacakges
-// implementation for all cases
+// This file adapts between the two implementations of godef and should be removed when
+// we fully switch to the go/packages implementation for all cases.
 
 import (
 	"bufio"
@@ -17,40 +16,41 @@ import (
 	"strconv"
 	"strings"
 
+	gotoken "go/token"
+	gotypes "go/types"
+
 	rpast "github.com/jjuliano/godef/go/ast"
 	rpprinter "github.com/jjuliano/godef/go/printer"
 	rptypes "github.com/jjuliano/godef/go/types"
-	gotoken "go/token"
-	gotypes "go/types"
 	"golang.org/x/tools/go/packages"
 )
 
 var forcePackages triBool
 
 func init() {
-	flag.Var(&forcePackages, "new-implementation", "force godef to use the new go/packages implentation")
+	flag.Var(&forcePackages, "new-implementation", "force godef to use the new go/packages implementation")
 }
 
-// triBool is used as a unset, on or off valued flag
+// triBool represents a tri-state boolean flag (unset, on, off)
 type triBool int
 
 const (
-	// unset means the triBool does not yet have a value
-	unset = triBool(iota)
-	// on means the triBool has been set to true
-	on
-	// off means the triBool has been set to false
-	off
+	unset triBool = iota // Unset state
+	on                   // On state
+	off                  // Off state
 )
 
 func (b *triBool) Set(s string) error {
 	v, err := strconv.ParseBool(s)
+	if err != nil {
+		return err
+	}
 	if v {
 		*b = on
 	} else {
 		*b = off
 	}
-	return err
+	return nil
 }
 
 func (b *triBool) Get() interface{} {
@@ -74,8 +74,8 @@ func (b *triBool) IsBoolFlag() bool {
 	return true
 }
 
+// detectModuleMode detects if module mode is enabled based on the packages.Config.
 func detectModuleMode(cfg *packages.Config) bool {
-	// first see if the config forces module mode
 	for _, e := range cfg.Env {
 		switch e {
 		case "GO111MODULE=off":
@@ -84,11 +84,9 @@ func detectModuleMode(cfg *packages.Config) bool {
 			return true
 		}
 	}
-	// do a fast test for go.mod in the working directory
 	if _, err := os.Stat(filepath.Join(cfg.Dir, "go.mod")); !os.IsNotExist(err) {
 		return true
 	}
-	// fall back to invoking the go tool to see if it will pick module mode
 	cmd := exec.Command("go", "env", "GOMOD")
 	cmd.Env = cfg.Env
 	cmd.Dir = cfg.Dir
@@ -96,10 +94,10 @@ func detectModuleMode(cfg *packages.Config) bool {
 	if err == nil {
 		return len(strings.TrimSpace(string(out))) > 0
 	}
-	// default to non module mode
 	return false
 }
 
+// adaptGodef adapts between godef implementations based on the provided config.
 func adaptGodef(cfg *packages.Config, filename string, src []byte, searchpos int) (*Object, error) {
 	usePackages := false
 	switch forcePackages {
@@ -124,6 +122,7 @@ func adaptGodef(cfg *packages.Config, filename string, src []byte, searchpos int
 	return adaptRPObject(obj, typ)
 }
 
+// adaptRPObject adapts an rpObject to an Object.
 func adaptRPObject(obj *rpast.Object, typ rptypes.Type) (*Object, error) {
 	pos := rptypes.FileSet.Position(rptypes.DeclPos(obj))
 	result := &Object{
@@ -136,6 +135,7 @@ func adaptRPObject(obj *rpast.Object, typ rptypes.Type) (*Object, error) {
 		},
 		Type: typ,
 	}
+
 	switch obj.Kind {
 	case rpast.Bad:
 		result.Kind = BadKind
@@ -164,6 +164,7 @@ func adaptRPObject(obj *rpast.Object, typ rptypes.Type) (*Object, error) {
 		result.Kind = TypeKind
 		result.Type = typ.Underlying(false)
 	}
+
 	for child := range typ.Iter() {
 		m, err := adaptRPObject(child, rptypes.Type{})
 		if err != nil {
@@ -175,12 +176,14 @@ func adaptRPObject(obj *rpast.Object, typ rptypes.Type) (*Object, error) {
 	return result, nil
 }
 
+// adaptGoObject adapts a go/types.Object to an Object.
 func adaptGoObject(fset *gotoken.FileSet, obj gotypes.Object) (*Object, error) {
 	result := &Object{
 		Name:     obj.Name(),
 		Position: objToPos(fset, obj),
 		Type:     obj.Type(),
 	}
+
 	switch obj := obj.(type) {
 	case *gotypes.Func:
 		result.Kind = FuncKind
@@ -211,6 +214,7 @@ func adaptGoObject(fset *gotoken.FileSet, obj gotypes.Object) (*Object, error) {
 	return result, nil
 }
 
+// objToPos converts a go/types.Object position to a Position struct.
 func objToPos(fSet *gotoken.FileSet, obj gotypes.Object) Position {
 	p := obj.Pos()
 	f := fSet.File(p)
@@ -223,9 +227,6 @@ func objToPos(fSet *gotoken.FileSet, obj gotypes.Object) Position {
 	if pos.Column != 1 {
 		return pos
 	}
-	// currently exportdata does not store the column
-	// until it does, we have a hacky fix to attempt to find the name within
-	// the line and patch the column to match
 	named, ok := obj.(interface{ Name() string })
 	if !ok {
 		return pos
@@ -234,6 +235,7 @@ func objToPos(fSet *gotoken.FileSet, obj gotypes.Object) Position {
 	if err != nil {
 		return pos
 	}
+	defer in.Close()
 	for l, scanner := 1, bufio.NewScanner(in); scanner.Scan(); l++ {
 		if l < pos.Line {
 			continue
@@ -253,10 +255,10 @@ func cleanFilename(path string) string {
 	if len(path) < len(prefix) || !strings.EqualFold(prefix, path[:len(prefix)]) {
 		return path
 	}
-	//TODO: we need a better way to get the GOROOT that uses the packages api
 	return runtime.GOROOT() + path[len(prefix):]
 }
 
+// pretty is a type that implements custom formatting for different types.
 type pretty struct {
 	n interface{}
 }
@@ -266,12 +268,6 @@ func (p pretty) Format(f fmt.State, c rune) {
 	case *rpast.BasicLit:
 		rpprinter.Fprint(f, rptypes.FileSet, n)
 	case rptypes.Type:
-		// TODO print path package when appropriate.
-		// Current issues with using p.n.Pkg:
-		//	- we should actually print the local package identifier
-		//	rather than the package path when possible.
-		//	- p.n.Pkg is non-empty even when
-		//	the type is not relative to the package.
 		rpprinter.Fprint(f, rptypes.FileSet, n.Node)
 	case gotypes.Type:
 		buf := &bytes.Buffer{}
