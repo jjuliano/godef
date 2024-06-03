@@ -16,20 +16,19 @@ The interpretation of the notes depends on the application.
 For example, the test suite for a static checking tool might
 use a @diag note to indicate an expected diagnostic:
 
-   fmt.Printf("%s", 1) //@ diag("%s wants a string, got int")
+	fmt.Printf("%s", 1) //@ diag("%s wants a string, got int")
 
 By contrast, the test suite for a source code navigation tool
 might use notes to indicate the positions of features of
 interest, the actions to be performed by the test,
 and their expected outcomes:
 
-   var x = 1 //@ x_decl
-   ...
-   print(x) //@ definition("x", x_decl)
-   print(x) //@ typeof("x", "int")
+	var x = 1 //@ x_decl
+	...
+	print(x) //@ definition("x", x_decl)
+	print(x) //@ typeof("x", "int")
 
-
-Note comment syntax
+# Note comment syntax
 
 Note comments always start with the special marker @, which must be the
 very first character after the comment opening pair, so //@ or /*@ with no
@@ -56,7 +55,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/token"
-	"path/filepath"
 	"regexp"
 )
 
@@ -96,14 +94,6 @@ func MatchBefore(fset *token.FileSet, readFile ReadFile, end token.Pos, pattern 
 	matchStart, matchEnd := -1, -1
 	switch pattern := pattern.(type) {
 	case string:
-		// If the file is a go.mod and we are matching // indirect, then we
-		// need to look for it on the line after the current line.
-		// TODO(golang/go#36894): have a more intuitive approach for // indirect
-		if filepath.Ext(f.Name()) == ".mod" && pattern == "// indirect" {
-			startOffset = f.Offset(f.LineStart(position.Line + 1))
-			endOffset = f.Offset(lineEnd(f, position.Line+1))
-			line = content[startOffset:endOffset]
-		}
 		bytePattern := []byte(pattern)
 		matchStart = bytes.Index(line, bytePattern)
 		if matchStart >= 0 {

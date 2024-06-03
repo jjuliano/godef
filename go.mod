@@ -1,8 +1,14 @@
-module github.com/rogpeppe/godef
+module github.com/jjuliano/godef
 
-go 1.13
+go 1.22.3
 
 require (
-	9fans.net/go v0.0.0-20181112161441-237454027057
-	golang.org/x/tools v0.0.0-20200226224502-204d844ad48d
+	9fans.net/go v0.0.5
+	github.com/jjuliano/godef
+	golang.org/x/tools v0.21.0
+)
+
+require (
+	golang.org/x/mod v0.17.0 // indirect
+	golang.org/x/sync v0.7.0 // indirect
 )
