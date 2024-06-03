@@ -3,7 +3,7 @@ name: CI/CD
 on:
   push:
     branches:
-      - main
+      - master
 
 permissions:
   contents: write  # This gives the GITHUB_TOKEN the necessary permissions
