@@ -12,11 +12,11 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/rogpeppe/godef/go/ast"
-	"github.com/rogpeppe/godef/go/parser"
-	"github.com/rogpeppe/godef/go/printer"
-	"github.com/rogpeppe/godef/go/token"
-	"github.com/rogpeppe/godef/go/types"
+	"github.com/jjuliano/godef/go/ast"
+	"github.com/jjuliano/godef/go/parser"
+	"github.com/jjuliano/godef/go/printer"
+	"github.com/jjuliano/godef/go/token"
+	"github.com/jjuliano/godef/go/types"
 )
 
 // Info holds information about an identifier.

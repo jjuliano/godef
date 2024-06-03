@@ -20,10 +20,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rogpeppe/godef/go/ast"
-	"github.com/rogpeppe/godef/go/parser"
-	"github.com/rogpeppe/godef/go/token"
-	"github.com/rogpeppe/godef/go/types"
+	"github.com/jjuliano/godef/go/ast"
+	"github.com/jjuliano/godef/go/parser"
+	"github.com/jjuliano/godef/go/token"
+	"github.com/jjuliano/godef/go/types"
 	"golang.org/x/tools/go/packages"
 )
 

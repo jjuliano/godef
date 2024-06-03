@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rogpeppe/godef/go/ast"
-	"github.com/rogpeppe/godef/go/parser"
-	"github.com/rogpeppe/godef/go/token"
+	"github.com/jjuliano/godef/go/ast"
+	"github.com/jjuliano/godef/go/parser"
+	"github.com/jjuliano/godef/go/token"
 )
 
 const (
