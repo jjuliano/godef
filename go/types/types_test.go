@@ -276,7 +276,6 @@ type sym struct {
 // The first occurrence of a translated symbol must be followed by a @
 // and letter representing the symbol kind (see kinds, above). All
 // subsequent references to that symbol must resolve to the given kind.
-//
 func translateSymbols(code []byte) (result []byte, offsetMap map[int]*sym) {
 	offsetMap = make(map[int]*sym)
 	buf := bytes.NewBuffer(code)
